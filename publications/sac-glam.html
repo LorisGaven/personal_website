@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SAC-GLAM - Loris Gaven</title>
+    <link rel="icon" href="../images/icon.png" type="image/png">
+    <link rel="stylesheet" href="../style.css">
+</head>
+<body>
+    <nav>
+        <a href="../index.html">&larr; Back to home</a>
+    </nav>
+
+    <article class="publication-page">
+        <h1>SAC-GLAM: Improving Online RL for LLM agents with Soft Actor-Critic and Hindsight Relabeling</h1>
+        <p class="authors">L. Gaven, C. Romac, T. Carta, S. Lamprier, O. Sigaud, P-Y. Oudeyer</p>
+        <p class="venue">IMOL Workshop - NeurIPS, 2024</p>
+
+        <div class="links">
+            <a href="#">Paper</a>
+            <a href="#">Code</a>
+        </div>
+
+        <section>
+            <h2>Abstract</h2>
+            <p>The past years have seen Large Language Models (LLMs) strive not only as generative models but also as agents solving textual sequential decision-making tasks. When facing complex environments where their zero-shot abilities are insufficient, recent work showed online Reinforcement Learning (RL) could be used for the LLM agent to discover and learn efficient strategies interactively. However, most prior work sticks to on-policy algorithms, which greatly reduces the scope of methods such agents could use for both exploration and exploitation, such as experience replay and hindsight relabeling. Yet, such methods may be key for LLM learning agents, and in particular when designing autonomous intrinsically motivated agents sampling and pursuing their own goals (i.e. autotelic agents). This paper presents and studies an adaptation of Soft Actor-Critic and hindsight relabeling to LLM agents. Our method not only paves the path towards autotelic LLM agents that learn online but can also outperform on-policy methods in more classic multi-goal RL environments.</p>
+        </section>
+
+        <section>
+            <h2>Citation</h2>
+            <pre class="citation">@article{gaven2024sac,
+  title={SAC-GLAM: Improving Online RL for LLM agents with Soft Actor-Critic and Hindsight Relabeling},
+  author={Gaven, Loris and Romac, Clement and Carta, Thomas and Lamprier, Sylvain and Sigaud, Olivier and Oudeyer, Pierre-Yves},
+  journal={arXiv preprint arXiv:2410.12481},
+  year={2024}
+}</pre>
+        </section>
+    </article>
+</body>
+</html>

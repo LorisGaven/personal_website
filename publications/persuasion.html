@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Optimizing for Persuasion - Loris Gaven</title>
+    <link rel="icon" href="../images/icon.png" type="image/png">
+    <link rel="stylesheet" href="../style.css">
+</head>
+<body>
+    <nav>
+        <a href="../index.html">&larr; Back to home</a>
+    </nav>
+
+    <article class="publication-page">
+        <h1>Optimizing for Persuasion Improves LLM Generalization: Evidence from Quality-Diversity Evolution of Debate Strategies</h1>
+        <p class="authors">A.J. Reedi, C. Léger, J. Pourcel, L. Gaven, P. Charriau, G. Pourcel</p>
+        <p class="venue">arXiv preprint, 2025</p>
+
+        <div class="links">
+            <a href="#">Paper</a>
+            <a href="#">Code</a>
+        </div>
+
+        <section>
+            <h2>Abstract</h2>
+            <p>Large Language Models (LLMs) optimized to output truthful answers often overfit, producing brittle reasoning that fails to generalize. While persuasion-based optimization has shown promise in debate settings, it has not been systematically compared against mainstream truth-based approaches. We introduce DebateQD, a minimal Quality-Diversity (QD) evolutionary algorithm that evolves diverse debate strategies across different categories (rationality, authority, emotional appeal, etc.) through tournament-style competitions where two LLMs debate while a third judges. Unlike previously proposed methods that require a population of LLMs, our approach maintains diversity of opponents through prompt-based strategies within a single LLM architecture, making it more accessible for experiments while preserving the key benefits of population-based optimization. In contrast to prior work, we explicitly isolate the role of the optimization objective by fixing the debate protocol and swapping only the fitness function: persuasion rewards strategies that convince the judge irrespective of truth, whereas truth rewards collaborative correctness. Across three model scales (7B, 32B, 72B parameters) and multiple dataset sizes from the QuALITY benchmark, persuasion-optimized strategies achieve up to 13.94% smaller train-test generalization gaps, while matching or exceeding truth optimization's test performance. These results provide the first controlled evidence that competitive pressure to persuade, rather than seek the truth collaboratively, fosters more transferable reasoning skills, offering a promising path for improving LLM generalization.</p>
+        </section>
+
+        <section>
+            <h2>Citation</h2>
+            <pre class="citation">@article{reedi2025optimizing,
+  title={Optimizing for Persuasion Improves LLM Generalization: Evidence from Quality-Diversity Evolution of Debate Strategies},
+  author={Reedi, Aksel Joonas and L{\'e}ger, Corentin and Pourcel, Julien and Gaven, Loris and Charriau, Perrine and Pourcel, Guillaume},
+  journal={arXiv preprint arXiv:2510.05909},
+  year={2025}
+}</pre>
+        </section>
+    </article>
+</body>
+</html>
