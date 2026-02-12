@@ -1,9 +1,9 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
 
 :root {
-    --bg: #1a1615;
-    --bg-card: #242020;
-    --bg-hover: #2e2928;
+    --bg: #272221;
+    --bg-card: #302b2a;
+    --bg-hover: #3a3534;
     --maroon: #c4817b;
     --maroon-dark: #a65d57;
     --maroon-glow: rgba(166, 93, 87, 0.2);
