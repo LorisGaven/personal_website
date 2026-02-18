@@ -14,10 +14,22 @@
     const plants = [];
     const MAX_PLANTS = 10;
     let time = 0;
+    let mouseX = -1000, mouseY = -1000;
+    const MOUSE_RADIUS = 100;
+    const MOUSE_STRENGTH = 60;
+    const RESOLUTION = 40;
+
+    window.addEventListener('mousemove', e => {
+        mouseX = e.clientX;
+        mouseY = e.clientY + window.scrollY;
+    });
+    window.addEventListener('mouseleave', () => {
+        mouseX = -1000;
+        mouseY = -1000;
+    });
 
     // Generate smooth stem using gentle sine waves
     function generateStem(baseX, baseY, height) {
-        const RESOLUTION = 40; // many points for smooth curves
         const points = [];
 
         // Random smooth wave parameters
@@ -39,65 +51,146 @@
         return points;
     }
 
-    // Apply wind offset: anchored at base, increases with height (t^2 for natural droop)
-    function windOffset(t, windPhase) {
-        const strength = 12;
-        return Math.sin(time * 0.008 + windPhase) * strength * t * t
-             + Math.sin(time * 0.017 + windPhase * 1.7) * strength * 0.3 * t * t;
+    // Precompute stem geometry: segment lengths, rest angles, scratch buffers
+    function precomputeStemGeometry(plant) {
+        const pts = plant.stemPoints;
+        const n = pts.length - 1; // 40 segments
+        plant.segLengths = new Float64Array(n);
+        plant.restAngles = new Float64Array(n);
+        plant.frameX = new Float64Array(pts.length);
+        plant.frameY = new Float64Array(pts.length);
+        plant.frameAngles = new Float64Array(pts.length);
+
+        for (let i = 0; i < n; i++) {
+            const dx = pts[i + 1].x - pts[i].x;
+            const dy = pts[i + 1].y - pts[i].y;
+            plant.segLengths[i] = Math.sqrt(dx * dx + dy * dy);
+            plant.restAngles[i] = Math.atan2(dy, dx);
+        }
+
+        // Initialize frame positions to rest
+        for (let i = 0; i < pts.length; i++) {
+            plant.frameX[i] = pts[i].x;
+            plant.frameY[i] = pts[i].y;
+        }
     }
 
-    // Draw stem as a smooth path, returns the tip position
-    function drawStem(points, progress, color, width, wPhase) {
-        if (progress <= 0) return points[0];
+    // Core physics: compute frame positions via angular perturbation
+    function computeFramePositions(plant) {
+        const n = RESOLUTION;
+        const wp = plant.windPhase;
+        const mp = plant.mousePush;
+        const mc = plant.mouseContactT;
 
-        const n = Math.floor(progress * (points.length - 1));
-        if (n < 1) return points[0];
+        // Base point is always anchored
+        plant.frameX[0] = plant.stemPoints[0].x;
+        plant.frameY[0] = plant.stemPoints[0].y;
+        plant.frameAngles[0] = 0;
 
-        ctx.strokeStyle = color;
-        ctx.lineWidth = width;
+        let accumAngle = 0;
+
+        for (let i = 0; i < n; i++) {
+            const t = (i + 1) / n; // 0..1, how far up the stem
+
+            // Wind: angle perturbation with propagating spatial phase
+            const windAngle = Math.sin(time * 0.008 + wp + i * 0.15) * 0.12 * t * t
+                            + Math.sin(time * 0.017 + wp * 1.7 + i * 0.10) * 0.05 * t * t;
+
+            // Mouse: concentrated curvature near contact point (Lorentzian)
+            const dt = t - mc;
+            const lorentzian = 1 / (1 + 80 * dt * dt);
+            const mouseAngle = mp * 0.006 * t * lorentzian;
+
+            const totalAngle = plant.restAngles[i] + windAngle + mouseAngle;
+            accumAngle = windAngle + mouseAngle; // track cumulative deflection for leaf tangent
+
+            plant.frameX[i + 1] = plant.frameX[i] + plant.segLengths[i] * Math.cos(totalAngle);
+            plant.frameY[i + 1] = plant.frameY[i] + plant.segLengths[i] * Math.sin(totalAngle);
+            plant.frameAngles[i + 1] = accumAngle;
+        }
+    }
+
+    // Update mouse push using current bent positions
+    function updateMousePush(plant) {
+        let minDist = Infinity;
+        let contactT = 0.5;
+        const n = RESOLUTION + 1;
+        for (let i = 0; i < n; i++) {
+            const dx = plant.frameX[i] - mouseX;
+            const dy = plant.frameY[i] - mouseY;
+            const d = dx * dx + dy * dy;
+            if (d < minDist) {
+                minDist = d;
+                contactT = i / (n - 1);
+            }
+        }
+        minDist = Math.sqrt(minDist);
+
+        let targetPush = 0;
+        let targetContact = plant.mouseContactT;
+        if (minDist < MOUSE_RADIUS) {
+            const force = (1 - minDist / MOUSE_RADIUS);
+            const dir = plant.baseX < mouseX ? -1 : 1;
+            targetPush = dir * force * MOUSE_STRENGTH;
+            targetContact = Math.max(0.05, contactT);
+        }
+
+        plant.mousePush += (targetPush - plant.mousePush) * 0.06;
+        plant.mouseContactT += (targetContact - plant.mouseContactT) * 0.06;
+        if (Math.abs(plant.mousePush) < 0.01) plant.mousePush = 0;
+    }
+
+    // Draw stem from precomputed frame positions
+    function drawStem(plant, progress) {
+        if (progress <= 0) return { x: plant.frameX[0], y: plant.frameY[0] };
+
+        const n = Math.floor(progress * RESOLUTION);
+        if (n < 1) return { x: plant.frameX[0], y: plant.frameY[0] };
+
+        ctx.strokeStyle = plant.stemColor;
+        ctx.lineWidth = plant.stemWidth;
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
         ctx.beginPath();
-        ctx.moveTo(points[0].x, points[0].y);
+        ctx.moveTo(plant.frameX[0], plant.frameY[0]);
 
         for (let i = 1; i <= n; i++) {
-            const t = i / (points.length - 1);
-            ctx.lineTo(points[i].x + windOffset(t, wPhase), points[i].y);
+            ctx.lineTo(plant.frameX[i], plant.frameY[i]);
         }
 
         // Fractional tip
-        const frac = (progress * (points.length - 1)) - n;
+        const frac = (progress * RESOLUTION) - n;
         let tipX, tipY;
-        if (n < points.length - 1 && frac > 0) {
-            const t = (n + frac) / (points.length - 1);
-            tipX = points[n].x + (points[n + 1].x - points[n].x) * frac + windOffset(t, wPhase);
-            tipY = points[n].y + (points[n + 1].y - points[n].y) * frac;
+        if (n < RESOLUTION && frac > 0) {
+            tipX = plant.frameX[n] + (plant.frameX[n + 1] - plant.frameX[n]) * frac;
+            tipY = plant.frameY[n] + (plant.frameY[n + 1] - plant.frameY[n]) * frac;
             ctx.lineTo(tipX, tipY);
         } else {
-            const idx = Math.min(n, points.length - 1);
-            const t = idx / (points.length - 1);
-            tipX = points[idx].x + windOffset(t, wPhase);
-            tipY = points[idx].y;
+            const idx = Math.min(n, RESOLUTION);
+            tipX = plant.frameX[idx];
+            tipY = plant.frameY[idx];
         }
 
         ctx.stroke();
         return { x: tipX, y: tipY };
     }
 
-    // Get position along stem at progress t (with wind)
-    function getStemPoint(points, t, wPhase) {
-        const idx = t * (points.length - 1);
+    // Get position and angle along stem at parameter t (0..1)
+    function getStemPoint(plant, t) {
+        const idx = t * RESOLUTION;
         const i = Math.floor(idx);
         const frac = idx - i;
-        if (i >= points.length - 1) {
+        if (i >= RESOLUTION) {
             return {
-                x: points[points.length - 1].x + windOffset(1, wPhase),
-                y: points[points.length - 1].y,
+                x: plant.frameX[RESOLUTION],
+                y: plant.frameY[RESOLUTION],
+                angle: plant.frameAngles[RESOLUTION],
             };
         }
         return {
-            x: points[i].x + (points[i + 1].x - points[i].x) * frac + windOffset(t, wPhase),
-            y: points[i].y + (points[i + 1].y - points[i].y) * frac,
+            x: plant.frameX[i] + (plant.frameX[i + 1] - plant.frameX[i]) * frac,
+            y: plant.frameY[i] + (plant.frameY[i + 1] - plant.frameY[i]) * frac,
+            angle: plant.frameAngles[i] + (plant.frameAngles[i + 1] - plant.frameAngles[i]) * frac,
         };
     }
 
@@ -115,21 +208,31 @@
         ctx.restore();
     }
 
-    // Draw grass tufts at the base of a plant
-    function drawGrass(x, y, blades, color, wPhase) {
+    // Draw grass tufts at the base of a plant (with mouse reaction)
+    function drawGrass(x, y, blades, color, wPhase, mousePushAngle) {
         ctx.strokeStyle = color;
         ctx.lineWidth = 1.2;
         ctx.lineCap = 'round';
         for (const b of blades) {
-            const wind = Math.sin(time * 0.002 + wPhase + b.phase) * 3 * b.height / 20;
+            const windAngle = Math.sin(time * 0.002 + wPhase + b.phase) * 0.3;
+            const totalAngle = windAngle + mousePushAngle * 0.5;
+
+            // Two-segment angle-based blade
+            const baseAngle = -Math.PI / 2 + b.lean * 0.02;
+            const seg1Len = b.height * 0.6;
+            const seg2Len = b.height * 0.4;
+
+            const a1 = baseAngle + totalAngle * 0.4;
+            const midX = x + b.ox + Math.cos(a1) * seg1Len;
+            const midY = y + Math.sin(a1) * seg1Len;
+
+            const a2 = baseAngle + totalAngle;
+            const tipX = midX + Math.cos(a2) * seg2Len;
+            const tipY = midY + Math.sin(a2) * seg2Len;
+
             ctx.beginPath();
             ctx.moveTo(x + b.ox, y);
-            ctx.quadraticCurveTo(
-                x + b.ox + b.lean * 0.5 + wind,
-                y - b.height * 0.6,
-                x + b.ox + b.lean + wind,
-                y - b.height,
-            );
+            ctx.quadraticCurveTo(midX, midY, tipX, tipY);
             ctx.stroke();
         }
     }
@@ -195,7 +298,7 @@
 
     // Slot system for even distribution
     const SLOT_HEIGHT = 250;
-    const slots = []; // { side: 'left'|'right', row: number, occupied: false }
+    const slots = [];
 
     function buildSlots() {
         slots.length = 0;
@@ -210,7 +313,6 @@
     function getSlot() {
         const free = slots.filter(s => !s.occupied);
         if (free.length === 0) return null;
-        // Pick random free slot
         const slot = free[Math.floor(Math.random() * free.length)];
         slot.occupied = true;
         return slot;
@@ -245,14 +347,12 @@
         const sizeRoll = Math.random();
         let height, stemWidth, leafSize, flowerSize, leafCount;
         if (sizeRoll < 0.5) {
-            // Medium
             height = 140 + Math.random() * 120;
             stemWidth = 1.5 + Math.random() * 1;
             leafSize = 8 + Math.random() * 10;
             flowerSize = 10 + Math.random() * 10;
             leafCount = 2 + Math.floor(Math.random() * 3);
         } else {
-            // Large
             height = 260 + Math.random() * 140;
             stemWidth = 2.5 + Math.random() * 1.5;
             leafSize = 14 + Math.random() * 16;
@@ -264,12 +364,16 @@
         const jitter = Math.random() * (SLOT_HEIGHT - 80);
         const baseY = slotTop + jitter + height;
         const stemPoints = generateStem(x, baseY, height);
+
+        // Build leaves with rest angle from stem geometry
         const leaves = [];
         for (let i = 0; i < leafCount; i++) {
+            const t = 0.15 + Math.random() * 0.65;
             leaves.push({
-                t: 0.15 + Math.random() * 0.65,
+                t,
                 angle: (Math.random() < 0.5 ? -1 : 1) * (0.3 + Math.random() * 1),
                 size: leafSize * (0.7 + Math.random() * 0.6),
+                restAngle: 0, // filled in after precompute
             });
         }
 
@@ -299,7 +403,7 @@
             }
         }
 
-        plants.push({
+        const plant = {
             stemPoints,
             baseX: x,
             baseY,
@@ -308,6 +412,8 @@
             grassBlades,
             stemWidth,
             windPhase: Math.random() * Math.PI * 2,
+            mousePush: 0,
+            mouseContactT: 0.5,
             slotSide: slot.side,
             slotRow: slot.row,
             flowerType,
@@ -323,7 +429,22 @@
             flowerColor2: Math.random() < 0.5 ? '#e8b990' : '#e8c4a8',
             age: 0,
             lifetime: 1000 + Math.random() * 800,
-        });
+        };
+
+        // Precompute geometry and leaf rest angles
+        precomputeStemGeometry(plant);
+        for (const leaf of plant.leaves) {
+            const idx = leaf.t * RESOLUTION;
+            const i = Math.floor(idx);
+            const frac = idx - i;
+            if (i >= RESOLUTION) {
+                leaf.restAngle = plant.frameAngles[RESOLUTION];
+            } else {
+                leaf.restAngle = plant.frameAngles[i] + (plant.frameAngles[i + 1] - plant.frameAngles[i]) * frac;
+            }
+        }
+
+        plants.push(plant);
     }
 
     for (let i = 0; i < 4; i++) spawnPlant();
@@ -352,19 +473,27 @@
 
             ctx.globalAlpha = p.opacity;
 
-            // Draw grass at base
-            drawGrass(p.baseX, p.baseY, p.grassBlades, p.leafColor, p.windPhase);
+            // Update mouse interaction (reads previous frame's frameX/Y)
+            updateMousePush(p);
 
-            // Draw stem - returns the current tip position
-            const tip = drawStem(p.stemPoints, p.growth, p.stemColor, p.stemWidth, p.windPhase);
+            // Compute new frame positions (angular deflection model)
+            computeFramePositions(p);
 
-            // Draw leaves once stem reaches them
+            // Draw grass at base (with mouse reaction)
+            const mousePushAngle = p.mousePush * 0.006;
+            drawGrass(p.baseX, p.baseY, p.grassBlades, p.leafColor, p.windPhase, mousePushAngle);
+
+            // Draw stem from precomputed positions
+            const tip = drawStem(p, p.growth);
+
+            // Draw leaves with tangent-following rotation
             for (const leaf of p.leaves) {
                 if (p.growth > leaf.t) {
-                    const pt = getStemPoint(p.stemPoints, leaf.t, p.windPhase);
+                    const pt = getStemPoint(p, leaf.t);
                     const leafProgress = Math.min(1, (p.growth - leaf.t) * 3);
                     const eased = leafProgress * leafProgress * (3 - 2 * leafProgress);
-                    drawLeaf(pt.x, pt.y, leaf.angle, leaf.size * eased, p.leafColor);
+                    const adjustedAngle = leaf.angle + (pt.angle - leaf.restAngle);
+                    drawLeaf(pt.x, pt.y, adjustedAngle, leaf.size * eased, p.leafColor);
                 }
             }
 
@@ -394,7 +523,6 @@
         if (canvas.height !== h) {
             canvas.height = h;
             buildSlots();
-            // Re-mark occupied slots
             for (const p of plants) {
                 const s = slots.find(s => s.side === p.slotSide && s.row === p.slotRow);
                 if (s) s.occupied = true;
